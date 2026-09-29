@@ -1,0 +1,4 @@
+collab:
+  autoStart: control
+  relayUrl: ws://127.0.0.1:7466
+  displayName: kir-pc

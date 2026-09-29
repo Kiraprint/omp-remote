@@ -1,0 +1,86 @@
+# omp remote access — self-hosted, no VPS, no Cloudflare
+
+Two control surfaces over one censorship-resistant transport:
+
+| Leg | What | Port on PC |
+|---|---|---|
+| Browser | omp collab guest SPA (transcript, prompt, interrupt, subagents) | 7466 |
+| Browser | Harness Remote PWA (separate pre-existing control plane) | 5173 |
+| Terminal | user-mode sshd -> `tmux attach -t omp` | 2222 |
+
+Phone -> PC transport: **iroh-ssh** (QUIC/UDP with HTTPS-443 relay fallback, E2E encrypted).
+The PC's endpoint id is derived from `~/.ssh/irohssh_ed25519` and is stable across reboots.
+
+## Source of truth
+
+`~/Code/omp-remote` is a git repo holding every file needed to rebuild the runtime dir,
+including the vendored SPA bundle. The runtime dir `~/.local/share/omp-remote/` is
+disposable and has been deleted once already (2026-09-29 18:18-18:21, by a parallel agent's
+"orphan cleanup" that also killed the tmux server), which broke the deployment silently.
+
+```bash
+~/Code/omp-remote/install.sh      # rebuild/repair the runtime dir and the units
+```
+
+## Files on the PC
+
+| Path | Role |
+|---|---|
+| `~/.local/share/omp-remote/collab-serve.ts` | self-hosted collab relay + SPA, single origin (127.0.0.1:7466) |
+| `~/.local/share/omp-remote/dist/` | collab-web SPA (production bundle) |
+| `~/.local/share/omp-remote/collab-overlay.yml` | omp overlay: `collab.autoStart=control`, `relayUrl=ws://127.0.0.1:7466` |
+| `~/.local/share/omp-remote/sshd/sshd_config` | root-free sshd, loopback 2222, key-only |
+| `~/.local/share/omp-remote/iroh-serve.sh` | iroh-ssh server launcher (needs an `unshare -rm` mount namespace) |
+| `~/.local/share/omp-remote/phone-link.sh` | prints the guest link rewritten for the phone's forward port |
+
+## Services (all `systemd --user`, enabled; `loginctl enable-linger kir` is also set)
+
+- `omp-sshd.service` — user-mode sshd on 127.0.0.1:2222
+- `omp-iroh-ssh.service` — iroh-ssh server (endpoint id below)
+- `omp-collab-relay.service` — relay + SPA on 127.0.0.1:7466
+- `omp-tmux.service` — ensures the `omp` tmux session exists at boot (`omp -c`, i.e. resumes the
+  most recently written session; restarting it while another process holds that session would
+  make two writers append to one transcript, so prefer editing the session from inside tmux)
+
+`unshare -rm` is required for iroh-ssh because this host blackholes IPv6 loopback: `/etc/hosts`
+and `/etc/gai.conf` are bind-mounted inside the namespace with `::1` removed and IPv4 precedence
+added, so `is_ssh_server_available("localhost:2222")` can resolve. No sudo is needed.
+
+## PC side
+
+```bash
+tmux new -As omp                                    # persistent session (linger is on)
+omp --config ~/.local/share/omp-remote/collab-overlay.yml
+# then, from anywhere:
+omp collab list --json                              # instanceId / participants / relayConnected
+~/.local/share/omp-remote/phone-link.sh 8443        # link to open on the phone
+```
+
+## Phone side (Android / Termux)
+
+```bash
+pkg update && pkg install -y rust git openssh
+cargo install iroh-ssh --locked                     # no arm64 release asset exists; build is heavy
+ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519
+cat ~/.ssh/id_ed25519.pub                           # append this to the PC's ~/.ssh/authorized_keys
+```
+
+Daily use — one process gives every surface:
+
+```bash
+iroh-ssh -N \
+  -o IdentityFile=~/.ssh/id_ed25519 -o IdentitiesOnly=yes \
+  -L 8443:127.0.0.1:7466 -L 8444:127.0.0.1:5173 -L 2222:127.0.0.1:2222 \
+  kir@df564d2be2f44686a13c77e67a8ce475af201206d129118f5324f35e9ba24323 &
+
+# browser:  http://127.0.0.1:8443/  <- link printed by phone-link.sh
+# terminal: ssh -p 2222 kir@127.0.0.1 -t 'tmux attach -t omp'
+```
+
+## Notes
+
+- The guest link's room id/key changes per session; only the `127.0.0.1:7466` part is rewritten.
+- `127.0.0.1` is a secure context, so the SPA gets WebCrypto over plain HTTP — no certificates.
+- The iroh relay fallback rides n0's shared public relays (stateless, E2E encrypted) only when a
+  direct QUIC path cannot be established; nothing is hosted by a third party besides that relay.
+- Key-only auth: the endpoint id is the only secret needed to reach port 2222, so keep it private.

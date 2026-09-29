@@ -1,0 +1,16 @@
+[Unit]
+Description=iroh-ssh server (remote access tunnel, root-free)
+After=network-online.target omp-sshd.service
+Wants=omp-sshd.service
+
+[Service]
+Type=simple
+# Private user+mount namespace only so the gai.conf bind mount is allowed unprivileged.
+ExecStart=/usr/bin/unshare -rm /home/kir/.local/share/omp-remote/iroh-serve.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

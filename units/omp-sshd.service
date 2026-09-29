@@ -1,0 +1,14 @@
+[Unit]
+Description=User-mode sshd for remote access (root-free, 127.0.0.1:2222)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/sshd -D -e -f /home/kir/.local/share/omp-remote/sshd/sshd_config
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=Ensure the persistent tmux session 'omp' exists (resumes the most recent session)
+After=omp-collab-relay.service
+Wants=omp-collab-relay.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/bash -lc '/usr/bin/tmux has-session -t omp 2>/dev/null || /usr/bin/tmux new-session -d -s omp -c /home/kir/Code/Me "/home/kir/.bun/bin/omp -c --config /home/kir/.local/share/omp-remote/collab-overlay.yml"'
+
+[Install]
+WantedBy=default.target

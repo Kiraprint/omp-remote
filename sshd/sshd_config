@@ -1,0 +1,10 @@
+Port 2222
+ListenAddress 127.0.0.1
+HostKey /home/kir/.local/share/omp-remote/sshd/host_ed25519
+PidFile /home/kir/.local/share/omp-remote/sshd/sshd.pid
+UsePAM no
+PasswordAuthentication no
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+PermitRootLogin no
+StrictModes no

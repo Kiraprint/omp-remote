@@ -1,0 +1,14 @@
+[Unit]
+Description=omp self-hosted collab relay + browser SPA (single origin :7466)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/kir/.local/share/omp-remote
+ExecStart=/home/kir/.bun/bin/bun /home/kir/.local/share/omp-remote/collab-serve.ts --port 7466
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
