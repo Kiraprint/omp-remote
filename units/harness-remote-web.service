@@ -1,0 +1,15 @@
+[Unit]
+Description=Harness Remote web bundle (phone/browser client, loopback only)
+Documentation=https://github.com/giuliastro/harness-remote
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/kir/.bun/bin/bun /home/kir/.local/share/omp-remote/harness-web/serve.ts --root /home/kir/.local/share/omp-remote/harness-web/dist --port 5173 --host 127.0.0.1
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

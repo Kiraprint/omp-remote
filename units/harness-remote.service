@@ -1,0 +1,21 @@
+[Unit]
+Description=Harness Remote gateway (native-session control plane, loopback only)
+Documentation=https://github.com/giuliastro/harness-remote
+After=network-online.target
+
+[Service]
+Type=simple
+# Harness detection walks PATH: omp lives in ~/.bun/bin and claude in ~/.local/bin.
+# With more than one ACP harness present the launcher starts the HR3 machine daemon,
+# which is what exposes Projects and per-machine native Session discovery.
+Environment=PATH=/home/kir/.local/bin:/home/kir/.bun/bin:/home/kir/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
+# Project discovery is rooted here, so Sessions are grouped under real Projects.
+WorkingDirectory=/home/kir/Code
+ExecStart=/home/kir/.npm-global/bin/harness-remote --backend omp --root /home/kir/Code --host 127.0.0.1 --port 4900 --username harness --password ${HARNESS_PASSWORD} --cors http://localhost:5173 --cors http://127.0.0.1:5173
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

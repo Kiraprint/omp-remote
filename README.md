@@ -14,7 +14,8 @@ The PC's endpoint id is derived from `~/.ssh/irohssh_ed25519` and is stable acro
 ## Source of truth
 
 `~/Code/omp-remote` is a git repo holding every file needed to rebuild the runtime dir,
-including the vendored SPA bundle. The runtime dir `~/.local/share/omp-remote/` is
+including the vendored SPA bundles and both control-plane legs (omp collab + Harness Remote).
+The runtime dir `~/.local/share/omp-remote/` is
 disposable and has been deleted once already (2026-09-29 18:18-18:21, by a parallel agent's
 "orphan cleanup" that also killed the tmux server), which broke the deployment silently.
 
@@ -28,6 +29,7 @@ disposable and has been deleted once already (2026-09-29 18:18-18:21, by a paral
 |---|---|
 | `~/.local/share/omp-remote/collab-serve.ts` | self-hosted collab relay + SPA, single origin (127.0.0.1:7466) |
 | `~/.local/share/omp-remote/dist/` | collab-web SPA (production bundle) |
+| `~/.local/share/omp-remote/harness-web/` | Harness Remote PWA bundle + its static server (`serve.ts`) |
 | `~/.local/share/omp-remote/collab-overlay.yml` | omp overlay: `collab.autoStart=control`, `relayUrl=ws://127.0.0.1:7466` |
 | `~/.local/share/omp-remote/sshd/sshd_config` | root-free sshd, loopback 2222, key-only |
 | `~/.local/share/omp-remote/iroh-serve.sh` | iroh-ssh server launcher (needs an `unshare -rm` mount namespace) |
@@ -38,6 +40,10 @@ disposable and has been deleted once already (2026-09-29 18:18-18:21, by a paral
 - `omp-sshd.service` — user-mode sshd on 127.0.0.1:2222
 - `omp-iroh-ssh.service` — iroh-ssh server (endpoint id below)
 - `omp-collab-relay.service` — relay + SPA on 127.0.0.1:7466
+- `harness-remote.service` — Harness Remote gateway on 127.0.0.1:4900 (Basic Auth; lists and
+  resumes *native* omp sessions across Projects — a different surface from the collab room,
+  which mirrors one live session). Needs `harness-remote` on PATH (`npm i -g harness-remote`).
+- `harness-remote-web.service` — Harness Remote PWA on 127.0.0.1:5173 (phone-forwarded as 8444)
 - `omp-tmux.service` — ensures the `omp` tmux session exists at boot. It starts a *dedicated*
   session (no `--continue`): resuming "the most recently written session" was observed attaching
   to a session that two other live omp processes were already writing. Continue an older
@@ -86,3 +92,6 @@ iroh-ssh -N \
 - The iroh relay fallback rides n0's shared public relays (stateless, E2E encrypted) only when a
   direct QUIC path cannot be established; nothing is hosted by a third party besides that relay.
 - Key-only auth: the endpoint id is the only secret needed to reach port 2222, so keep it private.
+- The PWA needs the gateway's Basic Auth once per device: add a machine with host `127.0.0.1`,
+  port `4900` (the forward target, not 8444) and the credentials from
+  `units/harness-remote.service`. The browser then remembers it.
