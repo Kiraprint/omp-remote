@@ -38,9 +38,11 @@ disposable and has been deleted once already (2026-09-29 18:18-18:21, by a paral
 - `omp-sshd.service` — user-mode sshd on 127.0.0.1:2222
 - `omp-iroh-ssh.service` — iroh-ssh server (endpoint id below)
 - `omp-collab-relay.service` — relay + SPA on 127.0.0.1:7466
-- `omp-tmux.service` — ensures the `omp` tmux session exists at boot (`omp -c`, i.e. resumes the
-  most recently written session; restarting it while another process holds that session would
-  make two writers append to one transcript, so prefer editing the session from inside tmux)
+- `omp-tmux.service` — ensures the `omp` tmux session exists at boot. It starts a *dedicated*
+  session (no `--continue`): resuming "the most recently written session" was observed attaching
+  to a session that two other live omp processes were already writing. Continue an older
+  conversation from inside the session (`/resume`) or over the SSH leg. `KillMode=process` keeps
+  a unit restart from killing the tmux server.
 
 `unshare -rm` is required for iroh-ssh because this host blackholes IPv6 loopback: `/etc/hosts`
 and `/etc/gai.conf` are bind-mounted inside the namespace with `::1` removed and IPv4 precedence

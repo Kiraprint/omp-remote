@@ -1,12 +1,17 @@
 [Unit]
-Description=Ensure the persistent tmux session 'omp' exists (resumes the most recent session)
+Description=Ensure the persistent tmux session 'omp' exists (dedicated remote-control session)
 After=omp-collab-relay.service
 Wants=omp-collab-relay.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/usr/bin/bash -lc '/usr/bin/tmux has-session -t omp 2>/dev/null || /usr/bin/tmux new-session -d -s omp -c /home/kir/Code/Me "/home/kir/.bun/bin/omp -c --config /home/kir/.local/share/omp-remote/collab-overlay.yml"'
+# Leave the tmux server running across unit restarts; only the guard process is killed.
+KillMode=process
+# No --continue: resuming "the most recently written session" can attach to a session another
+# live omp process is already writing (three writers on one transcript was observed 2026-09-29).
+# Continue an older conversation from inside the session instead (/resume there, or ssh in).
+ExecStart=/usr/bin/bash -lc '/usr/bin/tmux has-session -t omp 2>/dev/null || /usr/bin/tmux new-session -d -s omp -c /home/kir/Code/Me "/home/kir/.bun/bin/omp --config /home/kir/.local/share/omp-remote/collab-overlay.yml"'
 
 [Install]
 WantedBy=default.target

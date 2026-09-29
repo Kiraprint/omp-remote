@@ -19,7 +19,7 @@ install -m755 "$REPO/iroh-serve.sh"     "$DEST/iroh-serve.sh"
 install -m755 "$REPO/phone-link.sh"     "$DEST/phone-link.sh"
 install -m644 "$REPO/README.md"         "$DEST/README.md"
 install -m644 "$REPO/collab-overlay.yml" "$DEST/collab-overlay.yml"
-cp -f "$REPO/dist/." "$DEST/dist/"
+cp -fR "$REPO/dist/." "$DEST/dist/"
 
 # sshd: static config, per-machine host key (kept if it already exists)
 install -m600 "$REPO/sshd/sshd_config" "$DEST/sshd/sshd_config"
@@ -34,8 +34,12 @@ done
 
 systemctl --user daemon-reload
 systemctl --user enable --now omp-sshd.service omp-iroh-ssh.service omp-collab-relay.service
-# oneshot guard: recreates the tmux session only when it is missing
+# oneshot guard: recreate the tmux session only when it is actually missing, never kill a live one
 systemctl --user enable omp-tmux.service
-systemctl --user restart omp-tmux.service
+if tmux has-session -t omp 2>/dev/null; then
+  systemctl --user start omp-tmux.service
+else
+  systemctl --user restart omp-tmux.service
+fi
 
 echo "deployed to $DEST"
