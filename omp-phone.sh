@@ -169,6 +169,21 @@ cmd_status() {
   echo "---- last log lines ----"; tail -3 "$LOG" 2>/dev/null
 }
 
+cmd_diag() {
+  echo "== iroh-ssh version =="; iroh-ssh version 2>&1 | head -1
+  echo "== full tunnel log ($LOG) =="
+  cat "$LOG" 2>/dev/null | tail -40
+  echo "== relay reachability from phone =="
+  for r in https://dns.iroh.link https://use1-1.relay.iroh.network https://euw1-1.relay.iroh.network; do
+    code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$r" 2>/dev/null || echo 000)
+    echo "$r -> $code"
+  done
+  echo "== live iroh client processes =="
+  pgrep -af iroh-ssh | head -5
+  echo "== local forward listeners =="
+  netstat -tln 2>/dev/null | grep -E "$WEB_PORT|$WEB2_PORT|$SSH_FWD_PORT" || echo "none bound"
+}
+
 cmd_stop() {
   stop_tunnel
   termux-wake-unlock 2>/dev/null || true
@@ -181,6 +196,7 @@ case "${1:-}" in
   test)    cmd_test ;;
   connect) cmd_connect ;;
   status)  cmd_status ;;
+  diag)    cmd_diag ;;
   stop)    cmd_stop ;;
-  *) echo "usage: ./omp-phone.sh prepare|key|test|connect|status|stop" >&2; exit 1 ;;
+  *) echo "usage: ./omp-phone.sh prepare|key|test|connect|status|diag|stop" >&2; exit 1 ;;
 esac
