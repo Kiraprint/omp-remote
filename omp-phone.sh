@@ -84,7 +84,7 @@ cmd_key() {
 }
 
 launch_tunnel() {
-  iroh-ssh "${TUNNEL_ARGS[@]}" >>"$LOG" 2>&1 &
+  RUST_LOG="${RUST_LOG:-iroh=debug,iroh_ssh=info}" iroh-ssh "${TUNNEL_ARGS[@]}" >>"$LOG" 2>&1 &
   TL_PID=$!
 }
 
@@ -178,6 +178,10 @@ cmd_diag() {
     code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$r" 2>/dev/null || echo 000)
     echo "$r -> $code"
   done
+  echo "== pkarr record for the PC endpoint (must be 200/208) =="
+  curl -sS "https://dns.iroh.link/pkarr/57mr4k9n6tdepejhq9u8id8rqsz1yrog4rwtdd4uru3i7g7necto" -o /dev/null -w 'pkarr GET -> HTTP %{http_code}, %{size_download} bytes\n' --max-time 10 2>/dev/null || echo "pkarr GET -> FAILED"
+  echo "== DoH TXT probe (iroh resolves via DNS/DoH) =="
+  curl -sS "https://dns.iroh.link/dns-query?name=57mr4k9n6tdepejhq9u8id8rqsz1yrog4rwtdd4uru3i7g7necto.dns.iroh.link&type=TXT" -H "accept: application/dns-json" --max-time 10 2>/dev/null | head -c 300; echo
   echo "== live iroh client processes =="
   pgrep -af iroh-ssh | head -5
   echo "== local forward listeners =="
