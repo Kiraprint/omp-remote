@@ -35,6 +35,7 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 TUNNEL_ARGS=( -N
   -L "$WEB_PORT:127.0.0.1:7466"
   -L "$WEB2_PORT:127.0.0.1:5173"
+  -L "${GATEWAY_PORT:-4900}:127.0.0.1:4900"
   -L "$SSH_FWD_PORT:127.0.0.1:2222"
   -o IdentityFile="$KEY" -o IdentitiesOnly=yes -o IdentityAgent=none
   -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$KNOWN_HOSTS"
@@ -198,9 +199,9 @@ cmd_diag() {
   # netstat is not in Termux; parse /proc/net/tcp directly (port hex, st 0A = LISTEN)
   found=$(awk 'NR>1 && $4=="0A" {print $2}' /proc/net/tcp /proc/net/tcp6 2>/dev/null | cut -d: -f2 | sort -u)
   hits=$(printf '%s\n' "$found" | while read -r p; do
-    [ -n "$p" ] && d=$((16#$p)); [ "$d" = "$WEB_PORT" ] || [ "$d" = "$WEB2_PORT" ] || [ "$d" = "$SSH_FWD_PORT" ] && echo x
+    [ -n "$p" ] && d=$((16#$p)); [ "$d" = "$WEB_PORT" ] || [ "$d" = "$WEB2_PORT" ] || [ "$d" = "${GATEWAY_PORT:-4900}" ] || [ "$d" = "$SSH_FWD_PORT" ] && echo x
   done | wc -l)
-  [ "$hits" -gt 0 ] && echo "forward listeners bound: $hits/3" || echo "none bound"
+  [ "$hits" -gt 0 ] && echo "forward listeners bound: $hits/4" || echo "none bound"
 }
 
 cmd_stop() {

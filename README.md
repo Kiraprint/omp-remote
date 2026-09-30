@@ -78,10 +78,11 @@ Daily use — one process gives every surface:
 ```bash
 iroh-ssh -N \
   -o IdentityFile=~/.ssh/id_ed25519 -o IdentitiesOnly=yes \
-  -L 8443:127.0.0.1:7466 -L 8444:127.0.0.1:5173 -L 2222:127.0.0.1:2222 \
+  -L 8443:127.0.0.1:7466 -L 8444:127.0.0.1:5173 -L 4900:127.0.0.1:4900 -L 2222:127.0.0.1:2222 \
   kir@df564d2be2f44686a13c77e67a8ce475af201206d129118f5324f35e9ba24323 &
 
 # browser:  http://127.0.0.1:8443/  <- link printed by phone-link.sh
+# PWA:      http://127.0.0.1:8444/ (add machine 127.0.0.1:4900, creds from harness-remote.env)
 # terminal: ssh -p 2222 kir@127.0.0.1 -t 'tmux attach -t omp'
 ```
 
@@ -94,4 +95,4 @@ iroh-ssh -N \
 - Key-only auth: the endpoint id is the only secret needed to reach port 2222, so keep it private.
 - The PWA needs the gateway's Basic Auth once per device: add a machine with host `127.0.0.1`,
   port `4900` (the forward target, not 8444) and the credentials from
-  `units/harness-remote.service`. The browser then remembers it.
+  `~/.config/omp-remote/harness-remote.env` (username `harness`). The browser then remembers it.
