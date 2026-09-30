@@ -68,22 +68,32 @@ omp collab list --json                              # instanceId / participants 
 
 ```bash
 pkg update && pkg install -y rust git openssh
-cargo install iroh-ssh --locked                     # no arm64 release asset exists; build is heavy
-ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519
-cat ~/.ssh/id_ed25519.pub                           # append this to the PC's ~/.ssh/authorized_keys
+./omp-phone.sh prepare                              # builds the patched iroh-ssh (10-20 min on a phone)
+./omp-phone.sh key                                  # prints the PUBLIC key to authorize on the PC
+cat ~/.ssh/id_ed25519_omp.pub                       # append this to the PC's ~/.ssh/authorized_keys
 ```
 
-Daily use — one process gives every surface:
+Daily use — one process gives every surface (the endpoint id is *not* in this repo; see below):
 
 ```bash
-iroh-ssh -N \
-  -o IdentityFile=~/.ssh/id_ed25519 -o IdentitiesOnly=yes \
-  -L 8443:127.0.0.1:7466 -L 8444:127.0.0.1:5173 -L 4900:127.0.0.1:4900 -L 2222:127.0.0.1:2222 \
-  kir@df564d2be2f44686a13c77e67a8ce475af201206d129118f5324f35e9ba24323 &
+mkdir -p ~/.config/omp-remote
+echo '<your-endpoint-id>' > ~/.config/omp-remote/endpoint   # once, from 'iroh-ssh info' on the PC
+
+./omp-phone.sh test      # end-to-end check
+./omp-phone.sh connect   # persistent tunnel, auto-reconnects
 
 # browser:  http://127.0.0.1:8443/  <- link printed by phone-link.sh
 # PWA:      http://127.0.0.1:8444/ (add machine 127.0.0.1:4900, creds from harness-remote.env)
-# terminal: ssh -p 2222 kir@127.0.0.1 -t 'tmux attach -t omp'
+# terminal: ssh -i ~/.ssh/id_ed25519_omp -p 2222 kir@127.0.0.1 -t 'tmux attach -t omp'
+```
+
+Equivalent by hand:
+
+```bash
+iroh-ssh -N \
+  -o IdentityFile=~/.ssh/id_ed25519_omp -o IdentitiesOnly=yes \
+  -L 8443:127.0.0.1:7466 -L 8444:127.0.0.1:5173 -L 4900:127.0.0.1:4900 -L 2222:127.0.0.1:2222 \
+  kir@<your-endpoint-id> &
 ```
 
 ## Notes

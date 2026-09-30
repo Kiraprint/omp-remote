@@ -9,15 +9,22 @@
 #   ./omp-phone.sh status    show tunnel state
 #   ./omp-phone.sh stop      stop the tunnel
 #
-# Overridable: OMP_ENDPOINT OMP_USER WEB_PORT SSH_FWD_PORT OMP_MAX_WAIT
-#   OMP_MAX_WAIT = seconds to wait for you to authorize the key on the PC (default 900).
+# Overridable: OMP_ENDPOINT OMP_USER WEB_PORT WEB2_PORT GATEWAY_PORT SSH_FWD_PORT OMP_MAX_WAIT
+#   OMP_ENDPOINT  = the PC's iroh endpoint id (not in this repo). Read from
+#                   ~/.config/omp-remote/endpoint unless set here.
+#   OMP_MAX_WAIT  = seconds to wait for you to authorize the key on the PC (default 900).
 
 set -u
 
-OMP_ENDPOINT="${OMP_ENDPOINT:-df564d2be2f44686a13c77e67a8ce475af201206d129118f5324f35e9ba24323}"
+# The PC's iroh endpoint id is this deployment's public identity — it is deliberately NOT
+# committed. Provide it via $OMP_ENDPOINT, or write it once to the endpoint file
+# (the PC prints it: `iroh-ssh info`, or the omp-iroh-ssh.service journal).
+ENDPOINT_FILE="${OMP_ENDPOINT_FILE:-$HOME/.config/omp-remote/endpoint}"
+OMP_ENDPOINT="${OMP_ENDPOINT:-$(cat "$ENDPOINT_FILE" 2>/dev/null | tr -d '[:space:]')}"
 OMP_USER="${OMP_USER:-kir}"
 WEB_PORT="${WEB_PORT:-8443}"          # phone port -> PC collab SPA (127.0.0.1:7466)
 WEB2_PORT="${WEB2_PORT:-8444}"         # phone port -> Harness Remote PWA (127.0.0.1:5173)
+GATEWAY_PORT="${GATEWAY_PORT:-4900}"   # phone port -> Harness Remote gateway API (127.0.0.1:4900)
 SSH_FWD_PORT="${SSH_FWD_PORT:-2222}"   # phone port -> PC user-mode sshd (127.0.0.1:2222)
 OMP_MAX_WAIT="${OMP_MAX_WAIT:-900}"
 
@@ -32,10 +39,32 @@ export PATH="$CARGO_BIN:$PATH"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
+require_endpoint() {
+  [ -n "$OMP_ENDPOINT" ] || die "no endpoint id. Pass it once, e.g.:
+    mkdir -p ~/.config/omp-remote && echo <endpoint-id> > ~/.config/omp-remote/endpoint
+  or set OMP_ENDPOINT=<64-hex-endpoint-id> (the PC prints it with 'iroh-ssh info')."
+}
+
+# z-base-32 of a hex string — the encoding iroh uses for pkarr names.
+z32_of_hex() {
+  local hex alpha=ybndrfg8ejkmcpqxot1uwisza345h769 bits="" out="" i b n chunk
+  hex=$(printf '%s' "$1" | tr 'A-F' 'a-f')
+  for ((i = 0; i < ${#hex}; i += 2)); do
+    n=$((16#${hex:i:2}))
+    for ((b = 7; b >= 0; b--)); do bits+=$(((n >> b) & 1)); done
+  done
+  while ((${#bits} % 5 != 0)); do bits+="0"; done
+  for ((i = 0; i < ${#bits}; i += 5)); do
+    chunk=$((2#${bits:i:5}))
+    out+=${alpha:chunk:1}
+  done
+  printf '%s' "$out"
+}
+
 TUNNEL_ARGS=( -N
   -L "$WEB_PORT:127.0.0.1:7466"
   -L "$WEB2_PORT:127.0.0.1:5173"
-  -L "${GATEWAY_PORT:-4900}:127.0.0.1:4900"
+  -L "$GATEWAY_PORT:127.0.0.1:4900"
   -L "$SSH_FWD_PORT:127.0.0.1:2222"
   -o IdentityFile="$KEY" -o IdentitiesOnly=yes -o IdentityAgent=none
   -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$KNOWN_HOSTS"
@@ -95,6 +124,7 @@ launch_tunnel() {
 cmd_test() {
   command -v iroh-ssh >/dev/null || die "iroh-ssh missing — run ./omp-phone.sh prepare first"
   [ -f "$KEY" ] || die "no key yet — run ./omp-phone.sh key first"
+  require_endpoint
   echo "==> starting test tunnel to $OMP_USER@$OMP_ENDPOINT"
   stop_tunnel
   : >"$LOG"
@@ -148,6 +178,7 @@ cmd_test() {
 cmd_connect() {
   command -v iroh-ssh >/dev/null || die "iroh-ssh missing — run ./omp-phone.sh prepare first"
   [ -f "$KEY" ] || die "no key yet — run ./omp-phone.sh key first"
+  require_endpoint
   stop_tunnel
   : >"$LOG"
   echo "==> starting resilient tunnel (auto-reconnect loop)"
@@ -169,6 +200,7 @@ cmd_connect() {
 }
 
 cmd_status() {
+  require_endpoint
   if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
     echo "tunnel loop: running (pid $(cat "$PIDFILE"))"
   else
@@ -181,7 +213,9 @@ cmd_status() {
 }
 
 cmd_diag() {
+  require_endpoint
   echo "== iroh-ssh version =="; iroh-ssh version 2>&1 | head -1
+  echo "== endpoint id in use =="; echo "${OMP_ENDPOINT:-<unset>}"
   echo "== full tunnel log ($LOG) =="
   cat "$LOG" 2>/dev/null | tail -40
   echo "== relay reachability from phone =="
@@ -189,10 +223,15 @@ cmd_diag() {
     code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$r" 2>/dev/null || echo 000)
     echo "$r -> $code"
   done
-  echo "== pkarr record for the PC endpoint (must be 200/208) =="
-  curl -sS "https://dns.iroh.link/pkarr/57mr4k9n6tdepejhq9u8id8rqsz1yrog4rwtdd4uru3i7g7necto" -o /dev/null -w 'pkarr GET -> HTTP %{http_code}, %{size_download} bytes\n' --max-time 10 2>/dev/null || echo "pkarr GET -> FAILED"
-  echo "== DoH TXT probe (iroh resolves via DNS/DoH) =="
-  curl -sS "https://dns.iroh.link/dns-query?name=57mr4k9n6tdepejhq9u8id8rqsz1yrog4rwtdd4uru3i7g7necto.dns.iroh.link&type=TXT" -H "accept: application/dns-json" --max-time 10 2>/dev/null | head -c 300; echo
+  if [ -n "$OMP_ENDPOINT" ]; then
+    local z32 name
+    z32=$(z32_of_hex "$OMP_ENDPOINT")
+    name="_iroh4.$z32.dns.iroh.link"
+    echo "== pkarr HTTPS record (the lookup a patched client uses; want 200/2xx) =="
+    curl -sS "https://dns.iroh.link/pkarr/$z32" -o /dev/null -w 'pkarr GET -> HTTP %{http_code}, %{size_download} bytes\n' --max-time 10 2>/dev/null || echo "pkarr GET -> FAILED"
+    echo "== DNS TXT record (what stock iroh-ssh relies on; NXDOMAIN = discovery fails) =="
+    curl -sS "https://dns.iroh.link/dns-query?name=$name&type=TXT" -H "accept: application/dns-json" --max-time 10 2>/dev/null | head -c 300; echo
+  fi
   echo "== live iroh client processes =="
   pgrep -af iroh-ssh | head -5
   echo "== local forward listeners =="

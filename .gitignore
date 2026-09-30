@@ -1,0 +1,6 @@
+# Local runtime state and secrets — never commit
+*.env
+harness-remote.env
+endpoint.local
+*.gpg
+*.log
