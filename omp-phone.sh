@@ -123,8 +123,15 @@ cmd_test() {
     fi
   fi
   echo "==> tunnel is up (pid $TL_PID)"
-  sleep 3
-  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "http://127.0.0.1:$WEB_PORT/" 2>/dev/null || echo 000)
+  # The iroh relay dial + SSH handshake complete in the background (10-20s on mobile);
+  # forward listeners only bind after the session is fully up. Poll for readiness.
+  code=000
+  for _ in $(seq 1 15); do
+    sleep 2
+    code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 "http://127.0.0.1:$WEB_PORT/" 2>/dev/null || echo 000)
+    [ "$code" = "200" ] && break
+    kill -0 "$TL_PID" 2>/dev/null || break
+  done
   if [ "$code" = 200 ]; then echo "PASS  collab SPA via tunnel:  http://127.0.0.1:$WEB_PORT/ -> HTTP 200"
   else echo "FAIL  collab SPA via tunnel: HTTP $code"; fi
   sshout=$(ssh -i "$KEY" -p "$SSH_FWD_PORT" -o IdentitiesOnly=yes -o IdentityAgent=none \
@@ -188,7 +195,12 @@ cmd_diag() {
   echo "== live iroh client processes =="
   pgrep -af iroh-ssh | head -5
   echo "== local forward listeners =="
-  netstat -tln 2>/dev/null | grep -E "$WEB_PORT|$WEB2_PORT|$SSH_FWD_PORT" || echo "none bound"
+  # netstat is not in Termux; parse /proc/net/tcp directly (port hex, st 0A = LISTEN)
+  found=$(awk 'NR>1 && $4=="0A" {print $2}' /proc/net/tcp /proc/net/tcp6 2>/dev/null | cut -d: -f2 | sort -u)
+  hits=$(printf '%s\n' "$found" | while read -r p; do
+    [ -n "$p" ] && d=$((16#$p)); [ "$d" = "$WEB_PORT" ] || [ "$d" = "$WEB2_PORT" ] || [ "$d" = "$SSH_FWD_PORT" ] && echo x
+  done | wc -l)
+  [ "$hits" -gt 0 ] && echo "forward listeners bound: $hits/3" || echo "none bound"
 }
 
 cmd_stop() {
