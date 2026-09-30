@@ -54,11 +54,14 @@ cmd_prepare() {
   pkg update -y || true
   echo "==> installing packages (rust toolchain is large, needs ~3-4 GB free)"
   pkg install -y rust binutils git openssh tmux curl termux-api procps || die "pkg install failed"
-  if ! command -v iroh-ssh >/dev/null; then
-    echo "==> building iroh-ssh (10-20 min). Keep the screen on — taking a wake lock."
+  if ! command -v iroh-ssh >/dev/null || iroh-ssh version 2>/dev/null | grep -q '0.2.12'; then
+    echo "==> building patched iroh-ssh (10-20 min). Keep the screen on — taking a wake lock."
     termux-wake-lock 2>/dev/null || true
     df -h "$HOME" | tail -1
-    cargo install iroh-ssh --locked || die "cargo install failed (see above; if crates.io is slow/blocked, retry with a mirror, e.g. --config 'source.crates-io.replace-with=\"rsproxy\"' --config 'source.rsproxy.registry=\"sparse+https://rsproxy.cn/index/\"')"
+    # relay-dial fork: bypasses n0 DNS discovery (its TXT zone returns NXDOMAIN for long
+    # windows, which killed the tunnel with 'Discovery produced no results').
+    cargo install --git https://github.com/Kiraprint/iroh-ssh --locked \
+      || die "cargo install failed (see above; if crates.io is slow/blocked, retry with a mirror, e.g. --config 'source.crates-io.replace-with=\"rsproxy\"' --config 'source.rsproxy.registry=\"sparse+https://rsproxy.cn/index/\"')"
     termux-wake-unlock 2>/dev/null || true
   else
     echo "==> iroh-ssh already installed"
