@@ -33,6 +33,23 @@ if [ ! -f "$DEST/sshd/host_ed25519" ]; then
 fi
 chmod 600 "$DEST/sshd/host_ed25519"
 
+# Gateway credentials stay out of git. On first run, keep whatever password the live unit
+# already uses (so existing browser logins survive); otherwise generate a fresh one.
+ENVDIR="${XDG_CONFIG_HOME:-$HOME/.config}/omp-remote"
+ENVFILE="$ENVDIR/harness-remote.env"
+mkdir -p "$ENVDIR"
+if [ ! -f "$ENVFILE" ]; then
+  existing="$(grep -oE -- '--password [^ ]+' "$UNITDIR/harness-remote.service" 2>/dev/null | awk '{print $2}' | head -1)"
+  if [ -z "$existing" ]; then
+    existing="$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | cut -c1-28)"
+    echo "NOTE: generated a new harness-remote gateway password -> $ENVFILE"
+  else
+    echo "NOTE: reused the existing harness-remote gateway password -> $ENVFILE"
+  fi
+  (umask 077; printf 'HARNESS_PASSWORD=%s\n' "$existing" > "$ENVFILE")
+fi
+chmod 600 "$ENVFILE"
+
 for unit in omp-sshd omp-iroh-ssh omp-collab-relay omp-tmux harness-remote harness-remote-web; do
   install -m644 "$REPO/units/$unit.service" "$UNITDIR/$unit.service"
 done

@@ -11,6 +11,9 @@ Type=simple
 Environment=PATH=/home/kir/.local/bin:/home/kir/.bun/bin:/home/kir/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
 # Project discovery is rooted here, so Sessions are grouped under real Projects.
 WorkingDirectory=/home/kir/Code
+# Credentials are NOT in git: the gateway password lives in this env file (mode 600),
+# seeded by install.sh. Missing file is tolerated (-) so the unit still loads.
+EnvironmentFile=-/home/kir/.config/omp-remote/harness-remote.env
 ExecStart=/home/kir/.npm-global/bin/harness-remote --backend omp --root /home/kir/Code --host 127.0.0.1 --port 4900 --username harness --password ${HARNESS_PASSWORD} --cors http://localhost:5173 --cors http://127.0.0.1:5173
 Restart=always
 RestartSec=3
