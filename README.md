@@ -115,17 +115,36 @@ iroh-ssh -N \
 ## Patched iroh-ssh
 
 The phone builds a patched `iroh-ssh` (`cargo install --git https://github.com/Kiraprint/iroh-ssh`).
-Two changes, both needed on mobile networks:
+The change that matters on mobile:
 
-1. **pkarr HTTPS resolver on native targets** (submitted upstream as
-   [rustonbsd/iroh-ssh#58](https://github.com/rustonbsd/iroh-ssh/pull/58)). Stock `iroh-ssh`
-   resolves peers through n0 DNS TXT records only; when that zone returns `NXDOMAIN` (observed for
-   ~3 minutes straight, from 1.1.1.1, 8.8.8.8 and the authoritative `ns1.iroh.link`) while the
-   pkarr store still serves the record, dialling fails with `Discovery produced no results`.
-   Android makes this worse: Termux cannot create `/etc/resolv.conf`, so iroh falls back to plain
-   UDP/53 against Google's resolvers, where a stale negative answer sticks.
-2. **Dial through an explicit relay URL** — `EndpointAddr::new(id).with_relay_url(..)` instead of a
-   bare endpoint id, so a connection never depends on discovery at all.
+**Dial the peer through its home relay URL** — `EndpointAddr::new(id).with_relay_url(..)` instead of
+a bare endpoint id — so a connection never depends on iroh discovery.
+
+Why: stock `iroh-ssh` can only find a peer through iroh's discovery, which resolves the record
+`_iroh.<z32-endpoint-id>.dns.iroh.link` over the system resolver. On Android there is no
+`/etc/resolv.conf` for Termux to read, so iroh falls back to hardcoded public resolvers over plain
+UDP/53 — the first thing carrier networks block, intercept or answer from a stale cache. The client
+then dies with:
+
+```
+Error: No addressing information available
+    1: Discovery produced no results for <endpoint id>
+```
+
+Dialling the peer's relay directly removes discovery from the path entirely.
+
+> Correction, worth knowing if you read the earlier version of this note: an earlier analysis here
+> claimed n0's DNS zone was stale, based on `NXDOMAIN` for `_iroh4.<z32>.dns.iroh.link`. That name
+> does not exist — `_iroh4` is a misreading of the DNS wire format, where `\x05_iroh` (label)
+> followed by `\x34` (52 = the length of the z32 label, and ASCII `4`) looks like the text `_iroh4`.
+> The real record (`_iroh.<z32>.dns.iroh.link`) resolves normally:
+
+```bash
+dig TXT _iroh.57mr4k9n….dns.iroh.link @1.1.1.1
+# status: NOERROR   TXT "relay=https://use1-1.relay.n0.iroh-canary.iroh.link./"
+```
+
+> Use `./omp-phone.sh diag` to see both lookups for the endpoint this deployment uses.
 
 ## Attribution
 

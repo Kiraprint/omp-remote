@@ -88,10 +88,11 @@ cmd_prepare() {
     echo "==> building patched iroh-ssh (10-20 min). Keep the screen on — taking a wake lock."
     termux-wake-lock 2>/dev/null || true
     df -h "$HOME" | tail -1
-    # Patched fork (upstream PR rustonbsd/iroh-ssh#58): adds the n0 pkarr HTTPS resolver on
-    # native targets, because the stock client resolves peers through DNS TXT only and n0's
-    # zone can return NXDOMAIN for long windows ('Discovery produced no results'). The fork
-    # additionally supports dialing a peer through an explicit relay URL.
+    # Patched fork: the stock client can only find the peer through iroh discovery, which on
+    # Android runs over plain UDP/53 (Termux has no /etc/resolv.conf, so iroh falls back to
+    # hardcoded public resolvers). When that traffic is blocked or intercepted the client dies
+    # with 'Discovery produced no results'. The fork dials the peer through its home relay URL
+    # (EndpointAddr::with_relay_url), which needs no discovery at all.
     cargo install --git https://github.com/Kiraprint/iroh-ssh --locked \
       || die "cargo install failed (see above; if crates.io is slow/blocked, retry with a mirror, e.g. --config 'source.crates-io.replace-with=\"rsproxy\"' --config 'source.rsproxy.registry=\"sparse+https://rsproxy.cn/index/\"')"
     termux-wake-unlock 2>/dev/null || true
@@ -228,11 +229,15 @@ cmd_diag() {
   if [ -n "$OMP_ENDPOINT" ]; then
     local z32 name
     z32=$(z32_of_hex "$OMP_ENDPOINT")
-    name="_iroh4.$z32.dns.iroh.link"
-    echo "== pkarr HTTPS record (the lookup a patched client uses; want 200/2xx) =="
+    # iroh resolves `_iroh.<z32>.<origin>` (IROH_TXT_NAME). Quoting matters: the wire format
+    # is a length-prefixed label, so reading raw bytes as text yields a bogus "_iroh4" name.
+    name="_iroh.$z32.dns.iroh.link"
+    echo "== pkarr HTTPS record (what a browser/wasm client uses; want 200) =="
     curl -sS "https://dns.iroh.link/pkarr/$z32" -o /dev/null -w 'pkarr GET -> HTTP %{http_code}, %{size_download} bytes\n' --max-time 10 2>/dev/null || echo "pkarr GET -> FAILED"
-    echo "== DNS TXT record (what stock iroh-ssh relies on; NXDOMAIN = discovery fails) =="
+    echo "== DNS TXT record (what a native client uses; NOERROR + a TXT line = healthy) =="
     curl -sS "https://dns.iroh.link/dns-query?name=$name&type=TXT" -H "accept: application/dns-json" --max-time 10 2>/dev/null | head -c 300; echo
+    echo "  (if this fails but HTTPS to dns.iroh.link works, plain UDP/53 is blocked on this network —"
+    echo "   that is the case the relay-dial build exists for)"
   fi
   echo "== live iroh client processes =="
   pgrep -af iroh-ssh | head -5
