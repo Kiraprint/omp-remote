@@ -50,6 +50,14 @@ if [ ! -f "$ENVFILE" ]; then
 fi
 chmod 600 "$ENVFILE"
 
+# The iroh endpoint id is this deployment's public identity, so it is NOT committed to git.
+# Materialize it locally (from the iroh identity key) so it is easy to read/copy to the phone.
+ENDPOINTFILE="$ENVDIR/endpoint"
+if [ ! -s "$ENDPOINTFILE" ] && command -v iroh-ssh >/dev/null 2>&1; then
+  iroh-ssh info 2>/dev/null | grep -oE '[0-9a-f]{64}' | head -1 >"$ENDPOINTFILE" || true
+  [ -s "$ENDPOINTFILE" ] && echo "NOTE: wrote the endpoint id -> $ENDPOINTFILE (copy it to the phone once)"
+fi
+
 for unit in omp-sshd omp-iroh-ssh omp-collab-relay omp-tmux harness-remote harness-remote-web; do
   install -m644 "$REPO/units/$unit.service" "$UNITDIR/$unit.service"
 done
