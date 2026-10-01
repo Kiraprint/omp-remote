@@ -106,3 +106,36 @@ iroh-ssh -N \
 - The PWA needs the gateway's Basic Auth once per device: add a machine with host `127.0.0.1`,
   port `4900` (the forward target, not 8444) and the credentials from
   `~/.config/omp-remote/harness-remote.env` (username `harness`). The browser then remembers it.
+- The gateway only accepts browser calls from origins listed with `--cors`. The tunnel maps the
+  PWA to a *different port* than the API, which makes every call cross-origin, so both
+  `http://127.0.0.1:8444` and `http://localhost:8444` are allow-listed in the unit. Open the PWA
+  on one of those two origins (not the LAN IP) or the machine shows as unreachable.
+- Termux has no `netstat`; `omp-phone.sh diag` reads `/proc/net/tcp` instead.
+
+## Patched iroh-ssh
+
+The phone builds a patched `iroh-ssh` (`cargo install --git https://github.com/Kiraprint/iroh-ssh`).
+Two changes, both needed on mobile networks:
+
+1. **pkarr HTTPS resolver on native targets** (submitted upstream as
+   [rustonbsd/iroh-ssh#58](https://github.com/rustonbsd/iroh-ssh/pull/58)). Stock `iroh-ssh`
+   resolves peers through n0 DNS TXT records only; when that zone returns `NXDOMAIN` (observed for
+   ~3 minutes straight, from 1.1.1.1, 8.8.8.8 and the authoritative `ns1.iroh.link`) while the
+   pkarr store still serves the record, dialling fails with `Discovery produced no results`.
+   Android makes this worse: Termux cannot create `/etc/resolv.conf`, so iroh falls back to plain
+   UDP/53 against Google's resolvers, where a stale negative answer sticks.
+2. **Dial through an explicit relay URL** — `EndpointAddr::new(id).with_relay_url(..)` instead of a
+   bare endpoint id, so a connection never depends on discovery at all.
+
+## Attribution
+
+Bundles under `dist/` and `harness-web/` are vendored verbatim from their upstream projects and
+remain under their own licenses:
+
+| Path | Upstream | License |
+|---|---|---|
+| `dist/` | `@oh-my-pi/collab-web` (can1357/oh-my-pi) | MIT |
+| `harness-web/` | giuliastro/harness-remote | Apache-2.0 |
+
+`collab-serve.ts`, `iroh-serve.sh`, `phone-link.sh`, `omp-phone.sh`, `install.sh`, the systemd
+units and this document are this repo's own code (MIT).

@@ -88,8 +88,10 @@ cmd_prepare() {
     echo "==> building patched iroh-ssh (10-20 min). Keep the screen on — taking a wake lock."
     termux-wake-lock 2>/dev/null || true
     df -h "$HOME" | tail -1
-    # relay-dial fork: bypasses n0 DNS discovery (its TXT zone returns NXDOMAIN for long
-    # windows, which killed the tunnel with 'Discovery produced no results').
+    # Patched fork (upstream PR rustonbsd/iroh-ssh#58): adds the n0 pkarr HTTPS resolver on
+    # native targets, because the stock client resolves peers through DNS TXT only and n0's
+    # zone can return NXDOMAIN for long windows ('Discovery produced no results'). The fork
+    # additionally supports dialing a peer through an explicit relay URL.
     cargo install --git https://github.com/Kiraprint/iroh-ssh --locked \
       || die "cargo install failed (see above; if crates.io is slow/blocked, retry with a mirror, e.g. --config 'source.crates-io.replace-with=\"rsproxy\"' --config 'source.rsproxy.registry=\"sparse+https://rsproxy.cn/index/\"')"
     termux-wake-unlock 2>/dev/null || true
